@@ -58,4 +58,20 @@ public sealed class AppointmentsController : ControllerBase
         [FromServices] AppointmentService service,
         CancellationToken cancellationToken) =>
         Ok(await service.GetDashboardSummaryAsync(referenceDate, cancellationToken));
+
+    [HttpGet("notifications/due")]
+    public async Task<IActionResult> DueNotifications(
+        [FromServices] AppointmentService service,
+        CancellationToken cancellationToken) =>
+        Ok(await service.ListDueNotificationsAsync(cancellationToken));
+
+    [HttpPost("{id}/notifications/acknowledge")]
+    public async Task<IActionResult> AcknowledgeNotification(
+        string id,
+        [FromServices] AppointmentService service,
+        CancellationToken cancellationToken)
+    {
+        var appointment = await service.AcknowledgeNotificationAsync(id, cancellationToken);
+        return appointment is null ? NotFound(new { message = "Agendamento nao encontrado." }) : NoContent();
+    }
 }
