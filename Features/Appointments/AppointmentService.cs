@@ -28,6 +28,18 @@ public sealed class AppointmentService
         var startsAt = EnsureUtc(request.StartsAt);
         var endsAt = EnsureUtc(request.EndsAt);
         if (endsAt <= startsAt) throw new ArgumentException("O termino deve ser posterior ao inicio.");
+        if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+            throw new ArgumentException("O telefone do paciente e obrigatorio.");
+        if (request.ReminderOffsetValue is <= 0)
+            throw new ArgumentException("A antecedencia da notificacao deve ser maior que zero.");
+        if (request.ReminderOffsetValue.HasValue && !request.ReminderOffsetUnit.HasValue)
+            throw new ArgumentException("A unidade da notificacao e obrigatoria.");
+
+        var reminderAt = request.ReminderOffsetValue.HasValue
+            ? startsAt.Subtract(request.ReminderOffsetUnit == ReminderOffsetUnit.Days
+                ? TimeSpan.FromDays(request.ReminderOffsetValue.Value)
+                : TimeSpan.FromHours(request.ReminderOffsetValue.Value))
+            : (DateTime?)null;
 
         var now = DateTime.UtcNow;
         var appointment = new Appointment
@@ -35,22 +47,35 @@ public sealed class AppointmentService
             PatientId = request.PatientId.Trim(),
             EmployeeId = request.EmployeeId.Trim(),
             ProceedingId = request.ProceedingId.Trim(),
+            PatientName = (request.PatientName ?? request.PatientId).Trim(),
+            PhoneNumber = request.PhoneNumber.Trim(),
+            EmployeeName = (request.EmployeeName ?? request.EmployeeId).Trim(),
+            ProceedingName = (request.ProceedingName ?? request.ProceedingId).Trim(),
             StartsAt = startsAt,
             EndsAt = endsAt,
             Status = request.Status,
             ConfirmedAt = request.Status == AppointmentStatus.Confirmed ? now : null,
             FollowUpDueAt = request.FollowUpDueAt.HasValue ? EnsureUtc(request.FollowUpDueAt.Value) : null,
+            ReminderOffsetValue = request.ReminderOffsetValue,
+            ReminderOffsetUnit = request.ReminderOffsetUnit,
+            ReminderAt = reminderAt,
             CreatedAt = now,
             UpdatedAt = now
         };
         return await _repository.AddAsync(appointment, cancellationToken);
     }
 
-    public Task<IReadOnlyCollection<Appointment>> ListAsync(
+    public async Task<IReadOnlyCollection<AppointmentListItemResponse>> ListAsync(
         DateTime? fromUtc,
         DateTime? toUtc,
-        CancellationToken cancellationToken) =>
-        _repository.ListAsync(fromUtc?.ToUniversalTime(), toUtc?.ToUniversalTime(), cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var appointments = await _repository.ListAsync(
+            fromUtc?.ToUniversalTime(),
+            toUtc?.ToUniversalTime(),
+            cancellationToken);
+        return appointments.Select(ToListItem).ToArray();
+    }
 
     public Task<Appointment?> GetByIdAsync(string id, CancellationToken cancellationToken) =>
         _repository.GetByIdAsync(id, cancellationToken);
@@ -71,6 +96,31 @@ public sealed class AppointmentService
             appointment.ConfirmedAt = now;
         }
 
+        await _repository.ReplaceAsync(appointment, cancellationToken);
+        return appointment;
+    }
+
+    public async Task<IReadOnlyCollection<AppointmentNotificationResponse>> ListDueNotificationsAsync(
+        CancellationToken cancellationToken)
+    {
+        var appointments = await _repository.ListDueNotificationsAsync(DateTime.UtcNow, cancellationToken);
+        return appointments
+            .Where(x => x.Id is not null && x.ReminderAt.HasValue)
+            .Select(x => new AppointmentNotificationResponse(
+                x.Id!,
+                $"Atendimento de {x.PatientName}",
+                $"{x.PatientName} sera atendido por {x.EmployeeName} em {FormatLocalDate(x.StartsAt)}.",
+                x.StartsAt,
+                x.ReminderAt!.Value))
+            .ToArray();
+    }
+
+    public async Task<Appointment?> AcknowledgeNotificationAsync(string id, CancellationToken cancellationToken)
+    {
+        var appointment = await _repository.GetByIdAsync(id, cancellationToken);
+        if (appointment is null) return null;
+        appointment.NotificationSentAt ??= DateTime.UtcNow;
+        appointment.UpdatedAt = DateTime.UtcNow;
         await _repository.ReplaceAsync(appointment, cancellationToken);
         return appointment;
     }
@@ -126,4 +176,42 @@ public sealed class AppointmentService
 
     private static DateTime ToUtc(DateTime localDateTime, TimeZoneInfo timeZone) =>
         TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(localDateTime, DateTimeKind.Unspecified), timeZone);
+
+    private AppointmentListItemResponse ToListItem(Appointment appointment) => new(
+        appointment.Id,
+        appointment.PatientId,
+        appointment.PatientName,
+        appointment.PhoneNumber,
+        appointment.EmployeeId,
+        appointment.EmployeeName,
+        appointment.ProceedingId,
+        appointment.ProceedingName,
+        appointment.StartsAt,
+        appointment.EndsAt,
+        appointment.Status,
+        ResolveScheduleStatus(appointment),
+        appointment.ReminderAt,
+        appointment.NotificationSentAt);
+
+    private string ResolveScheduleStatus(Appointment appointment)
+    {
+        if (appointment.Status == AppointmentStatus.Completed) return "Completed";
+        if (appointment.Status == AppointmentStatus.Cancelled) return "Cancelled";
+        if (appointment.Status == AppointmentStatus.NoShow) return "NoShow";
+
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(_options.TimeZone);
+        var now = DateTime.UtcNow;
+        var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, timeZone);
+        var localStart = TimeZoneInfo.ConvertTimeFromUtc(appointment.StartsAt, timeZone);
+        if (appointment.EndsAt < now) return "Overdue";
+        if (localStart.Date == localNow.Date) return "Today";
+        if (appointment.StartsAt <= now.AddHours(24)) return "Approaching";
+        return "Scheduled";
+    }
+
+    private string FormatLocalDate(DateTime utcDate)
+    {
+        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(_options.TimeZone);
+        return TimeZoneInfo.ConvertTimeFromUtc(utcDate, timeZone).ToString("dd/MM/yyyy 'as' HH:mm");
+    }
 }

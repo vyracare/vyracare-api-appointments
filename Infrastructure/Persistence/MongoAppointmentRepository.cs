@@ -42,6 +42,19 @@ public sealed class MongoAppointmentRepository : IAppointmentRepository
     public Task ReplaceAsync(Appointment appointment, CancellationToken cancellationToken) =>
         _collection.ReplaceOneAsync(x => x.Id == appointment.Id, ToDocument(appointment), cancellationToken: cancellationToken);
 
+    public async Task<IReadOnlyCollection<Appointment>> ListDueNotificationsAsync(
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
+    {
+        var documents = await _collection.Find(
+                x => x.ReminderAt != null && x.ReminderAt <= nowUtc &&
+                     x.NotificationSentAt == null && x.StartsAt >= nowUtc &&
+                     x.Status != AppointmentStatus.Cancelled && x.Status != AppointmentStatus.Completed)
+            .SortBy(x => x.ReminderAt)
+            .ToListAsync(cancellationToken);
+        return documents.Select(ToDomain).ToArray();
+    }
+
     public Task<long> CountActiveBetweenAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken) =>
         _collection.CountDocumentsAsync(
             x => x.StartsAt >= fromUtc && x.StartsAt < toUtc && x.Status != AppointmentStatus.Cancelled,
@@ -79,12 +92,20 @@ public sealed class MongoAppointmentRepository : IAppointmentRepository
         PatientId = value.PatientId,
         EmployeeId = value.EmployeeId,
         ProceedingId = value.ProceedingId,
+        PatientName = value.PatientName,
+        PhoneNumber = value.PhoneNumber,
+        EmployeeName = value.EmployeeName,
+        ProceedingName = value.ProceedingName,
         StartsAt = value.StartsAt,
         EndsAt = value.EndsAt,
         Status = value.Status,
         ConfirmedAt = value.ConfirmedAt,
         FollowUpDueAt = value.FollowUpDueAt,
         FollowUpScheduledAt = value.FollowUpScheduledAt,
+        ReminderOffsetValue = value.ReminderOffsetValue,
+        ReminderOffsetUnit = value.ReminderOffsetUnit,
+        ReminderAt = value.ReminderAt,
+        NotificationSentAt = value.NotificationSentAt,
         CreatedAt = value.CreatedAt,
         UpdatedAt = value.UpdatedAt
     };
@@ -95,12 +116,20 @@ public sealed class MongoAppointmentRepository : IAppointmentRepository
         PatientId = value.PatientId,
         EmployeeId = value.EmployeeId,
         ProceedingId = value.ProceedingId,
+        PatientName = value.PatientName,
+        PhoneNumber = value.PhoneNumber,
+        EmployeeName = value.EmployeeName,
+        ProceedingName = value.ProceedingName,
         StartsAt = value.StartsAt,
         EndsAt = value.EndsAt,
         Status = value.Status,
         ConfirmedAt = value.ConfirmedAt,
         FollowUpDueAt = value.FollowUpDueAt,
         FollowUpScheduledAt = value.FollowUpScheduledAt,
+        ReminderOffsetValue = value.ReminderOffsetValue,
+        ReminderOffsetUnit = value.ReminderOffsetUnit,
+        ReminderAt = value.ReminderAt,
+        NotificationSentAt = value.NotificationSentAt,
         CreatedAt = value.CreatedAt,
         UpdatedAt = value.UpdatedAt
     };
@@ -111,12 +140,20 @@ public sealed class MongoAppointmentRepository : IAppointmentRepository
         public string PatientId { get; set; } = string.Empty;
         public string EmployeeId { get; set; } = string.Empty;
         public string ProceedingId { get; set; } = string.Empty;
+        public string PatientName { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string EmployeeName { get; set; } = string.Empty;
+        public string ProceedingName { get; set; } = string.Empty;
         public DateTime StartsAt { get; set; }
         public DateTime EndsAt { get; set; }
         [BsonRepresentation(BsonType.String)] public AppointmentStatus Status { get; set; }
         public DateTime? ConfirmedAt { get; set; }
         public DateTime? FollowUpDueAt { get; set; }
         public DateTime? FollowUpScheduledAt { get; set; }
+        public int? ReminderOffsetValue { get; set; }
+        [BsonRepresentation(BsonType.String)] public ReminderOffsetUnit? ReminderOffsetUnit { get; set; }
+        public DateTime? ReminderAt { get; set; }
+        public DateTime? NotificationSentAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }

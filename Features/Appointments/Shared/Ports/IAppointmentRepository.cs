@@ -8,6 +8,7 @@ public interface IAppointmentRepository
     Task<IReadOnlyCollection<Appointment>> ListAsync(DateTime? fromUtc, DateTime? toUtc, CancellationToken cancellationToken);
     Task<Appointment?> GetByIdAsync(string id, CancellationToken cancellationToken);
     Task ReplaceAsync(Appointment appointment, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<Appointment>> ListDueNotificationsAsync(DateTime nowUtc, CancellationToken cancellationToken);
     Task<long> CountActiveBetweenAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken);
     Task<long> CountConfirmedBetweenAsync(
         DateTime appointmentFromUtc,
