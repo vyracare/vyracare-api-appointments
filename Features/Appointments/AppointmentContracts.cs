@@ -9,7 +9,13 @@ public sealed record CreateAppointmentRequest(
     DateTime StartsAt,
     DateTime EndsAt,
     AppointmentStatus Status = AppointmentStatus.Scheduled,
-    DateTime? FollowUpDueAt = null);
+    DateTime? FollowUpDueAt = null,
+    string? PatientName = null,
+    string? PhoneNumber = null,
+    string? EmployeeName = null,
+    string? ProceedingName = null,
+    int? ReminderOffsetValue = null,
+    ReminderOffsetUnit? ReminderOffsetUnit = null);
 
 public sealed record UpdateAppointmentStatusRequest(AppointmentStatus Status);
 
@@ -22,3 +28,26 @@ public sealed record DashboardSummaryResponse(
     AppointmentsTodayMetric AppointmentsToday,
     PendingReturnsMetric PendingReturns,
     WeeklyOccupancyMetric WeeklyOccupancy);
+
+public sealed record AppointmentListItemResponse(
+    string? Id,
+    string PatientId,
+    string PatientName,
+    string PhoneNumber,
+    string EmployeeId,
+    string EmployeeName,
+    string ProceedingId,
+    string ProceedingName,
+    DateTime StartsAt,
+    DateTime EndsAt,
+    AppointmentStatus Status,
+    string ScheduleStatus,
+    DateTime? ReminderAt,
+    DateTime? NotificationSentAt);
+
+public sealed record AppointmentNotificationResponse(
+    string AppointmentId,
+    string Title,
+    string Message,
+    DateTime StartsAt,
+    DateTime ReminderAt);
