@@ -18,6 +18,7 @@ public enum ReminderOffsetUnit
 public sealed class Appointment
 {
     public string? Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
     public string PatientId { get; set; } = string.Empty;
     public string EmployeeId { get; set; } = string.Empty;
     public string ProceedingId { get; set; } = string.Empty;
@@ -35,6 +36,7 @@ public sealed class Appointment
     public ReminderOffsetUnit? ReminderOffsetUnit { get; set; }
     public DateTime? ReminderAt { get; set; }
     public DateTime? NotificationSentAt { get; set; }
+    public DateTime? NotificationReadAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

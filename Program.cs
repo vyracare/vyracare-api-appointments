@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MongoDB.Driver;
 using Vyracare.Api.Appointments.Common.Configuration;
+using Vyracare.Api.Appointments.Common.Tenancy;
 using Vyracare.Api.Appointments.Features.Appointments;
 using Vyracare.Api.Appointments.Features.Appointments.Shared.Ports;
 using Vyracare.Api.Appointments.Infrastructure;
@@ -28,7 +29,10 @@ builder.Services.AddScoped(sp =>
     return sp.GetRequiredService<IMongoClient>().GetDatabase(options.Database);
 });
 builder.Services.AddScoped<IAppointmentRepository, MongoAppointmentRepository>();
+builder.Services.AddHostedService<MongoAppointmentIndexInitializer>();
 builder.Services.AddScoped<AppointmentService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 
 var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 if (string.IsNullOrWhiteSpace(jwt.Key)) throw new InvalidOperationException("Jwt:Key nao configurado.");
@@ -95,6 +99,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors("DefaultCors");
 app.UseAuthentication();
+app.UseMiddleware<TenantContextMiddleware>();
 app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "vyracare-api-appointments" })).AllowAnonymous();
 app.MapControllers().RequireAuthorization();

@@ -125,6 +125,26 @@ public sealed class AppointmentService
         return appointment;
     }
 
+    public async Task<IReadOnlyCollection<AppointmentNotificationResponse>> ListUnreadNotificationsAsync(
+        CancellationToken cancellationToken)
+    {
+        var appointments = await _repository.ListUnreadNotificationsAsync(DateTime.UtcNow, cancellationToken);
+        return appointments
+            .Where(x => x.Id is not null && x.ReminderAt.HasValue)
+            .Select(ToNotification)
+            .ToArray();
+    }
+
+    public async Task<bool> MarkNotificationReadAsync(string id, CancellationToken cancellationToken)
+    {
+        var appointment = await _repository.GetByIdAsync(id, cancellationToken);
+        if (appointment is null) return false;
+        appointment.NotificationReadAt ??= DateTime.UtcNow;
+        appointment.UpdatedAt = DateTime.UtcNow;
+        await _repository.ReplaceAsync(appointment, cancellationToken);
+        return true;
+    }
+
     public async Task<DashboardSummaryResponse> GetDashboardSummaryAsync(
         DateOnly? referenceDate,
         CancellationToken cancellationToken)
@@ -214,4 +234,11 @@ public sealed class AppointmentService
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById(_options.TimeZone);
         return TimeZoneInfo.ConvertTimeFromUtc(utcDate, timeZone).ToString("dd/MM/yyyy 'as' HH:mm");
     }
+
+    private AppointmentNotificationResponse ToNotification(Appointment appointment) => new(
+        appointment.Id!,
+        $"Atendimento de {appointment.PatientName}",
+        $"{appointment.PatientName} sera atendido por {appointment.EmployeeName} em {FormatLocalDate(appointment.StartsAt)}.",
+        appointment.StartsAt,
+        appointment.ReminderAt!.Value);
 }

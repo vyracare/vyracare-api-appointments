@@ -88,6 +88,29 @@ public sealed class AppointmentServiceTests
         Assert.NotNull(acknowledged?.NotificationSentAt);
     }
 
+    [Fact]
+    public async Task UnreadNotificationCanBeMarkedAsRead()
+    {
+        var appointment = new Appointment
+        {
+            Id = "507f1f77bcf86cd799439011",
+            PatientName = "Maria Silva",
+            EmployeeName = "Dra. Ana",
+            StartsAt = DateTime.UtcNow.AddHours(2),
+            EndsAt = DateTime.UtcNow.AddHours(3),
+            ReminderAt = DateTime.UtcNow.AddMinutes(-1)
+        };
+        var repository = new FakeAppointmentRepository { StoredAppointment = appointment };
+        var service = CreateService(repository);
+
+        var notifications = await service.ListUnreadNotificationsAsync(CancellationToken.None);
+        var marked = await service.MarkNotificationReadAsync(appointment.Id, CancellationToken.None);
+
+        Assert.Single(notifications);
+        Assert.True(marked);
+        Assert.NotNull(appointment.NotificationReadAt);
+    }
+
     private static AppointmentService CreateService(IAppointmentRepository repository) =>
         new(repository, Options.Create(new AppointmentOptions
         {
@@ -109,6 +132,7 @@ public sealed class AppointmentServiceTests
         public Task<Appointment?> GetByIdAsync(string id, CancellationToken cancellationToken) => Task.FromResult(StoredAppointment);
         public Task ReplaceAsync(Appointment appointment, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<IReadOnlyCollection<Appointment>> ListDueNotificationsAsync(DateTime nowUtc, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<Appointment>>(StoredAppointment is null ? [] : [StoredAppointment]);
+        public Task<IReadOnlyCollection<Appointment>> ListUnreadNotificationsAsync(DateTime nowUtc, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyCollection<Appointment>>(StoredAppointment is null ? [] : [StoredAppointment]);
         public Task<long> CountActiveBetweenAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken) => Task.FromResult(ActiveCount);
         public Task<long> CountConfirmedBetweenAsync(DateTime appointmentFromUtc, DateTime appointmentToUtc, DateTime confirmedFromUtc, DateTime confirmedToUtc, CancellationToken cancellationToken) => Task.FromResult(ConfirmedCount);
         public Task<long> CountPendingFollowUpsAsync(DateTime fromUtc, DateTime toUtc, CancellationToken cancellationToken) => Task.FromResult(PendingFollowUpsCount);
